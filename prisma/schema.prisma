@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CUTTING
+  STITCHING
+  IRON
+}
+
+enum Stage {
+  CUTTING
+  STITCHING
+  IRONING
+}
+
+enum Size {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+  XXL3
+  XXL4
+  XXL5
+}
+
+enum BatchStatus {
+  DRAFT
+  CUTTING_ASSIGNED
+  CUTTING_IN_PROGRESS
+  CUTTING_DONE
+  STITCHING_ASSIGNED
+  STITCHING_IN_PROGRESS
+  STITCHING_DONE
+  IRONING_IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  name             String
+  role             Role
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  refreshTokens    RefreshToken[]
+  cuttingBatches   ProductionBatch[] @relation("CuttingWorker")
+  stitchingBatches ProductionBatch[] @relation("StitchingWorker")
+  ironingEntries   IroningEntry[]    @relation("IroningWorker")
+  workerLedger     WorkerLedgerEntry[] @relation("WorkerLedger")
+  payrollSnapshots PayrollSnapshot[]   @relation("PayrollSnapshots")
+  auditLogs        AuditLog[]          @relation("AuditLogs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Vendor {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  rolls     InventoryRoll[]
+}
+
+model MaterialType {
+  id               String            @id @default(uuid())
+  name             String            @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  rolls            InventoryRoll[]
+  productMaterials ProductMaterial[]
+  monthlyRates     MonthlyRateTable[]
+  workerLedgerEntries WorkerLedgerEntry[]
+}
+
+model InventoryRoll {
+  id               String                 @id @default(uuid())
+  rollCode         String                 @unique
+  vendorId         String
+  vendor           Vendor                 @relation(fields: [vendorId], references: [id])
+  materialTypeId   String
+  materialType     MaterialType           @relation(fields: [materialTypeId], references: [id])
+  color            String
+  shade            String?
+  gsm              Float
+  initialMeters    Float
+  remainingMeters  Float
+  cost             Float
+  purchaseDate     DateTime
+  isAssigned       Boolean                @default(false)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  transactions     InventoryTransaction[]
+  batchAssignments BatchRollAssignment[]
+}
+
+model InventoryTransaction {
+  id        String        @id @default(uuid())
+  rollId    String
+  roll      InventoryRoll @relation(fields: [rollId], references: [id])
+  oldValue  Float
+  newValue  Float
+  reason    String
+  userId    String
+  createdAt DateTime      @default(now())
+}
+
+model SystemConfig {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+}
+
+model Product {
+  id            String            @id @default(uuid())
+  name          String
+  category      String?
+  sizeRangeFrom Size
+  sizeRangeTo   Size
+  imageUrl      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  materials     ProductMaterial[]
+  batches       ProductionBatch[]
+}
+
+model ProductMaterial {
+  id             String       @id @default(uuid())
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materialTypeId String
+  materialType   MaterialType @relation(fields: [materialTypeId], references: [id])
+
+  @@unique([productId, materialTypeId])
+}
+
+model ProductionBatch {
+  id                String                @id @default(uuid())
+  batchCode         String                @unique
+  productId         String
+  product           Product               @relation(fields: [productId], references: [id])
+  status            BatchStatus           @default(DRAFT)
+  cuttingWorkerId   String?
+  cuttingWorker     User?                 @relation("CuttingWorker", fields: [cuttingWorkerId], references: [id])
+  stitchingWorkerId String?
+  stitchingWorker   User?                 @relation("StitchingWorker", fields: [stitchingWorkerId], references: [id])
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  rollAssignments   BatchRollAssignment[]
+  cuttingOutputs    CuttingOutput[]
+  cuttingLeftover   CuttingLeftover?
+  stitchingOutputs  StitchingOutput[]
+  ironingEntries    IroningEntry[]
+  workerLedgerEntries WorkerLedgerEntry[]
+}
+
+model BatchRollAssignment {
+  id        String          @id @default(uuid())
+  batchId   String
+  batch     ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rollId    String
+  roll      InventoryRoll   @relation(fields: [rollId], references: [id])
+  createdAt DateTime        @default(now())
+
+  @@unique([batchId, rollId])
+}
+
+
+model CuttingOutput {
+  id        String          @id @default(uuid())
+  batchId   String
+  batch     ProductionBatch @relation(fields: [batchId], references: [id])
+  size      Size
+  quantity  Int
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([batchId, size])
+}
+
+model CuttingLeftover {
+  id             String          @id @default(uuid())
+  batchId        String          @unique
+  batch          ProductionBatch @relation(fields: [batchId], references: [id])
+  leftoverMeters Float
+  createdAt      DateTime        @default(now())
+}
+
+
+model StitchingOutput {
+  id        String          @id @default(uuid())
+  batchId   String
+  batch     ProductionBatch @relation(fields: [batchId], references: [id])
+  size      Size
+  quantity  Int
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([batchId, size])
+}
+
+model IroningEntry {
+  id        String          @id @default(uuid())
+  batchId   String
+  batch     ProductionBatch @relation(fields: [batchId], references: [id])
+  size      Size
+  quantity  Int
+  workerId  String
+  worker    User            @relation("IroningWorker", fields: [workerId], references: [id])
+  createdAt DateTime        @default(now())
+}
+
+
+model WorkerLedgerEntry {
+  id             String          @id @default(uuid())
+  workerId       String
+  worker         User            @relation("WorkerLedger", fields: [workerId], references: [id])
+  batchId        String
+  batch          ProductionBatch @relation(fields: [batchId], references: [id])
+  materialTypeId String
+  materialType   MaterialType    @relation(fields: [materialTypeId], references: [id])
+  stage          Stage
+  quantity       Int
+  month          String          // Format: "YYYY-MM"
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model MonthlyRateTable {
+  id             String       @id @default(uuid())
+  materialTypeId String
+  materialType   MaterialType @relation(fields: [materialTypeId], references: [id])
+  stage          Stage
+  rate           Float
+  month          String       // Format: "YYYY-MM"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([materialTypeId, stage, month])
+}
+
+model PayrollSnapshot {
+  id            String   @id @default(uuid())
+  workerId      String
+  worker        User     @relation("PayrollSnapshots", fields: [workerId], references: [id])
+  month         String   // Format: "YYYY-MM"
+  totalEarnings Float
+  details       Json     // Stores breakdown: [{materialType, stage, quantity, rate, amount}]
+  finalizedAt   DateTime @default(now())
+
+  @@unique([workerId, month])
+}
+
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("AuditLogs", fields: [userId], references: [id])
+  action    String   // e.g., "QUANTITY_EDIT", "ASSIGNMENT_CHANGE", "INVENTORY_ADJUSTMENT", "PAYROLL_CHANGE", "ADMIN_OVERRIDE"
+  entity    String   // e.g., "CuttingOutput", "StitchingOutput", "ProductionBatch", "WorkerLedgerEntry"
+  entityId  String
+  oldValue  String?  // JSON string of old value
+  newValue  String?  // JSON string of new value
+  createdAt DateTime @default(now())
+}

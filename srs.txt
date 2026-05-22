@@ -1,0 +1,516 @@
+# Manufacturing Management System (MMS)
+
+## Software Requirements Specification (SRS)
+
+Version: 1.0
+
+---
+
+# 1. Project Overview
+
+The Manufacturing Management System (MMS) is a responsive web-based ERP-style application designed for garment manufacturing businesses.
+
+The software manages:
+
+* Cloth roll inventory
+* Product management
+* Production batches
+* Cutting workflow
+* Stitching workflow
+* Ironing workflow
+* Worker tracking
+* Payroll calculation
+* Role-based access control
+
+The system will be optimized for both desktop and mobile browsers.
+
+---
+
+# 2. User Roles
+
+## 2.1 Admin
+
+The Admin has full access to the system.
+
+Responsibilities:
+
+* Manage inventory
+* Create products
+* Create production batches
+* Assign workers
+* View progress
+* Edit quantities
+* Calculate payroll
+* Configure rates
+* View reports
+* Manage users
+
+## 2.2 Cutting User
+
+Responsibilities:
+
+* View assigned cutting batches
+* Enter cutting quantities
+* Return leftover cloth
+* Complete cutting stage
+
+## 2.3 Stitching User
+
+Responsibilities:
+
+* View assigned stitching batches
+* Enter stitched quantities
+* Complete stitching stage
+
+## 2.4 Iron User
+
+Responsibilities:
+
+* View available stitched stock
+* Pick pieces for ironing
+* Submit ironing quantities
+
+---
+
+# 3. Business Workflow
+
+```text
+Inventory Rolls
+    ↓
+Product Creation
+    ↓
+Production Batch Creation
+    ↓
+Roll Assignment
+    ↓
+Cutting
+    ↓
+Stitching
+    ↓
+Ironing
+    ↓
+Completed
+```
+
+---
+
+# 4. Functional Requirements
+
+# 4.1 Authentication & Authorization
+
+Features:
+
+* Secure login
+* JWT authentication
+* Refresh token handling
+* Role-based access control
+* Password hashing
+* Session management
+
+Roles:
+
+* ADMIN
+* CUTTING
+* STITCHING
+* IRON
+
+---
+
+# 4.2 Inventory Management
+
+The system must support:
+
+* Adding cloth rolls
+* Editing cloth roll details
+* Tracking remaining meters
+* Inventory transaction history
+* Leftover cloth returns
+* Vendor tracking
+
+Each roll will store:
+
+* Roll code
+* Vendor
+* Material type
+* Color
+* Shade
+* GSM
+* Initial meters
+* Remaining meters
+* Cost
+* Purchase date
+
+Inventory is tracked in meters.
+
+One roll can only be assigned to one production batch at a time.
+
+If leftover cloth after cutting is above the admin-defined threshold, it will return to inventory.
+
+---
+
+# 4.3 Product Management
+
+Admin can:
+
+* Create products
+* Upload product images
+* Set category
+* Select size range
+* Assign cloth rolls
+
+Standard sizes:
+
+* XS
+* S
+* M
+* L
+* XL
+* XXL
+* 3XL
+* 4XL
+* 5XL
+
+Example:
+
+* XS to L
+* M to 3XL
+
+Products support multiple materials.
+
+The frontend will show estimated production quantity calculations.
+
+---
+
+# 4.4 Production Batch Management
+
+Admin can:
+
+* Create production batches
+* Assign rolls
+* Assign cutting worker
+* Assign stitching worker
+* Track progress
+* View production details
+
+Batch statuses:
+
+* DRAFT
+* CUTTING_ASSIGNED
+* CUTTING_IN_PROGRESS
+* CUTTING_DONE
+* STITCHING_ASSIGNED
+* STITCHING_IN_PROGRESS
+* STITCHING_DONE
+* IRONING_IN_PROGRESS
+* COMPLETED
+* CANCELLED
+
+---
+
+# 4.5 Cutting Module
+
+Cutting users can:
+
+* View assigned batches
+* View assigned rolls
+* View product images
+* Enter size-wise cut quantities
+* Enter leftover cloth quantity
+* Submit completed cutting process
+
+The cutting process is completed fully before stitching starts.
+
+Only one cutting worker can work on a batch.
+
+Admin can edit cutting quantities later if needed.
+
+---
+
+# 4.6 Stitching Module
+
+Stitching users can:
+
+* View assigned batches
+* Enter stitched quantities
+* Complete stitching stage
+
+Only one stitching worker can work on a batch.
+
+Admin can edit stitched quantities.
+
+After stitching:
+
+* stitched stock becomes available for ironing.
+
+---
+
+# 4.7 Ironing Module
+
+Iron workers can:
+
+* View available stitched stock
+* Pick pieces from multiple batches
+* Select size
+* Submit ironing completion
+
+Multiple iron workers can work simultaneously.
+
+The system must:
+
+* Deduct stitched stock automatically
+* Prevent over-consumption
+* Track remaining available stitched stock
+
+---
+
+# 4.8 Worker Ledger & Payroll
+
+The system stores:
+
+* Worker activity history
+* Material type worked on
+* Quantity completed
+* Stage completed
+
+Payment Logic:
+
+* Rates are entered monthly by admin
+* Rates differ by:
+
+  * Material type
+  * Stage
+
+Example:
+
+* Cotton Stitching = ₹4/piece
+* Cotton Iron = ₹2/piece
+
+Payroll is calculated monthly.
+
+Admin can:
+
+* Edit quantities
+* Adjust records
+* Finalize payroll snapshots
+
+Historical payroll must remain unchanged after finalization.
+
+---
+
+# 4.9 Audit Logs
+
+The system must maintain audit logs for:
+
+* Quantity edits
+* Assignment changes
+* Inventory adjustments
+* Payroll changes
+* Admin overrides
+
+Audit log fields:
+
+* User
+* Action
+* Old value
+* New value
+* Timestamp
+
+---
+
+# 5. Non-Functional Requirements
+
+The system must be:
+
+* Responsive
+* Mobile compatible
+* Scalable
+* Secure
+* Transaction-safe
+* Maintainable
+* Modular
+
+The system should support future expansion.
+
+---
+
+# 6. Recommended Technology Stack
+
+## Frontend
+
+* Next.js
+* TypeScript
+* TailwindCSS
+* shadcn/ui
+* TanStack Query
+* Zustand
+
+## Backend
+
+* NestJS
+* TypeScript
+
+## Database
+
+* PostgreSQL
+
+## ORM
+
+* Prisma
+
+## Authentication
+
+* JWT + Refresh Tokens
+
+## File Storage
+
+* Cloudinary
+
+## Hosting
+
+Frontend:
+
+* Vercel
+
+Backend:
+
+* Railway / Render
+
+Database:
+
+* Supabase PostgreSQL
+
+---
+
+# 7. Database Design Overview
+
+Core tables:
+
+* Users
+* Vendors
+* MaterialTypes
+* InventoryRolls
+* InventoryTransactions
+* Products
+* ProductionBatches
+* BatchMaterialAssignments
+* CuttingOutputs
+* CuttingLeftovers
+* StitchingOutputs
+* IroningEntries
+* WorkerLedgerEntries
+* MonthlyRateTables
+* PayrollSnapshots
+* AuditLogs
+
+---
+
+# 8. Security Requirements
+
+Security requirements:
+
+* Password hashing
+* Secure authentication
+* Role-based authorization
+* Protected routes
+* Backend validation
+* Transaction safety
+* Audit logging
+
+---
+
+# 9. Future Scope
+
+Planned future features:
+
+* Analytics dashboard
+* PDF reports
+* Excel exports
+* Barcode/QR support
+* Notifications
+* Multi-factory support
+* Production analytics
+* Advanced payroll reports
+
+---
+
+# 10. MVP Scope
+
+Included in MVP:
+
+* Authentication
+* Inventory management
+* Product management
+* Batch management
+* Cutting workflow
+* Stitching workflow
+* Ironing workflow
+* Worker ledger
+* Payroll calculation
+* Admin controls
+
+Excluded from MVP:
+
+* Realtime sockets
+* Offline support
+* QR scanning
+* Multi-factory support
+* Advanced analytics
+
+---
+
+# 11. Recommended Development Order
+
+Phase 1:
+
+* Authentication
+* User roles
+
+Phase 2:
+
+* Inventory management
+
+Phase 3:
+
+* Product & batch management
+
+Phase 4:
+
+* Cutting workflow
+
+Phase 5:
+
+* Stitching workflow
+
+Phase 6:
+
+* Ironing workflow
+
+Phase 7:
+
+* Payroll & ledger
+
+Phase 8:
+
+* Analytics & reporting
+
+---
+
+# 12. Final Architecture
+
+```text
+Next.js Frontend
+       ↓
+NestJS Backend API
+       ↓
+PostgreSQL Database
+```
+
+Architecture Type:
+
+* Modular Monolith
+
+Recommended deployment:
+
+* Frontend → Vercel
+* Backend → Railway/Render
+* Database → Supabase PostgreSQL
