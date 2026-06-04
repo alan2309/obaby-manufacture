@@ -20,6 +20,28 @@ async function main() {
 
   console.log('Seed: admin@mms.local created');
 
+  // --- Worker Users ---
+  const workersData = [
+    { email: 'cutting@mms.local', name: 'Cutting Worker', role: Role.CUTTING, password: 'cutting123' },
+    { email: 'stitching@mms.local', name: 'Stitching Worker', role: Role.STITCHING, password: 'stitching123' },
+    { email: 'iron@mms.local', name: 'Ironing Worker', role: Role.IRON, password: 'iron123' },
+  ];
+
+  for (const worker of workersData) {
+    const hashedWorkerPassword = await bcrypt.hash(worker.password, 10);
+    await prisma.user.upsert({
+      where: { email: worker.email },
+      update: {},
+      create: {
+        email: worker.email,
+        password: hashedWorkerPassword,
+        name: worker.name,
+        role: worker.role,
+      },
+    });
+    console.log(`Seed: ${worker.email} created`);
+  }
+
   // --- Vendors ---
   const vendorNames = [
     'Arvind Mills',
