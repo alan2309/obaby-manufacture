@@ -58,108 +58,109 @@ export class IroningService {
   }
 
   async submitIroning(userId: string, dto: SubmitIroningDto) {
-    const batch = await this.prisma.productionBatch.findUnique({
-      where: { id: dto.batchId },
-      include: {
-        stitchingOutputs: true,
-        ironingEntries: true,
-      },
-    });
-
-    if (!batch) {
-      throw new NotFoundException('Batch not found');
-    }
-
-    if (!['STITCHING_DONE', 'IRONING_IN_PROGRESS'].includes(batch.status)) {
-      throw new BadRequestException(
-        'Batch must be in STITCHING_DONE or IRONING_IN_PROGRESS status',
-      );
-    }
-
-    // Calculate available for (batchId, size)
-    const stitchingOutput = batch.stitchingOutputs.find(
-      (so) => so.size === dto.size,
-    );
-    const stitchedQuantity = stitchingOutput ? stitchingOutput.quantity : 0;
-
-    const ironedQuantity = batch.ironingEntries
-      .filter((entry) => entry.size === dto.size)
-      .reduce((sum, entry) => sum + entry.quantity, 0);
-
-    const available = stitchedQuantity - ironedQuantity;
-
-    if (dto.quantity > available) {
-      throw new BadRequestException(
-        `Cannot iron more than available quantity (available: ${available})`,
-      );
-    }
-
-    // Create IroningEntry
-    const entry = await this.prisma.ironingEntry.create({
-      data: {
-        batchId: dto.batchId,
-        size: dto.size,
-        quantity: dto.quantity,
-        workerId: userId,
-      },
-    });
-
-    // If batch status is STITCHING_DONE, transition to IRONING_IN_PROGRESS
-    if (batch.status === 'STITCHING_DONE') {
-      await this.prisma.productionBatch.update({
+    // Use a transaction to prevent race conditions on available quantity
+    return this.prisma.$transaction(async (tx) => {
+      const batch = await tx.productionBatch.findUnique({
         where: { id: dto.batchId },
-        data: { status: 'IRONING_IN_PROGRESS' },
+        include: {
+          stitchingOutputs: true,
+          ironingEntries: true,
+        },
       });
-    }
 
-    // Check if ALL sizes are fully ironed
-    const updatedBatch = await this.prisma.productionBatch.findUnique({
-      where: { id: dto.batchId },
-      include: {
-        stitchingOutputs: true,
-        ironingEntries: true,
-        rollAssignments: { include: { roll: true } },
-      },
-    });
+      if (!batch) {
+        throw new NotFoundException('Batch not found');
+      }
 
-    if (updatedBatch) {
-      const allFullyIroned = updatedBatch.stitchingOutputs.every((so) => {
-        const totalIroned = updatedBatch.ironingEntries
+      if (!['STITCHING_DONE', 'IRONING_IN_PROGRESS'].includes(batch.status)) {
+        throw new BadRequestException(
+          'Batch must be in STITCHING_DONE or IRONING_IN_PROGRESS status',
+        );
+      }
+
+      // Calculate available for (batchId, size)
+      const stitchingOutput = batch.stitchingOutputs.find(
+        (so) => so.size === dto.size,
+      );
+      const stitchedQuantity = stitchingOutput ? stitchingOutput.quantity : 0;
+
+      const ironedQuantity = batch.ironingEntries
+        .filter((entry) => entry.size === dto.size)
+        .reduce((sum, entry) => sum + entry.quantity, 0);
+
+      const available = stitchedQuantity - ironedQuantity;
+
+      if (dto.quantity > available) {
+        throw new BadRequestException(
+          `Cannot iron more than available quantity (available: ${available})`,
+        );
+      }
+
+      // Create IroningEntry
+      const entry = await tx.ironingEntry.create({
+        data: {
+          batchId: dto.batchId,
+          size: dto.size,
+          quantity: dto.quantity,
+          workerId: userId,
+        },
+      });
+
+      // If batch status is STITCHING_DONE, transition to IRONING_IN_PROGRESS
+      if (batch.status === 'STITCHING_DONE') {
+        await tx.productionBatch.update({
+          where: { id: dto.batchId },
+          data: { status: 'IRONING_IN_PROGRESS' },
+        });
+      }
+
+      // Check if ALL sizes are fully ironed
+      const updatedIroningEntries = await tx.ironingEntry.findMany({
+        where: { batchId: dto.batchId },
+      });
+
+      const allFullyIroned = batch.stitchingOutputs.every((so) => {
+        const totalIroned = updatedIroningEntries
           .filter((ie) => ie.size === so.size)
           .reduce((sum, ie) => sum + ie.quantity, 0);
         return totalIroned >= so.quantity;
       });
 
-      if (allFullyIroned && updatedBatch.stitchingOutputs.length > 0) {
-        await this.prisma.productionBatch.update({
+      if (allFullyIroned && batch.stitchingOutputs.length > 0) {
+        await tx.productionBatch.update({
           where: { id: dto.batchId },
           data: { status: 'COMPLETED' },
         });
 
-        // Auto-generate ledger entry for ironing worker
-        const totalIronedQty = updatedBatch.ironingEntries
-          .filter((ie) => ie.workerId === userId)
-          .reduce((sum, ie) => sum + ie.quantity, 0);
-        const materialTypeId = updatedBatch.rollAssignments[0]?.roll?.materialTypeId;
+        // Auto-generate ledger entries for ALL ironing workers
+        const batchWithRolls = await tx.productionBatch.findUnique({
+          where: { id: dto.batchId },
+          include: { rollAssignments: { include: { roll: true } } },
+        });
+        const materialTypeId = batchWithRolls?.rollAssignments[0]?.roll?.materialTypeId;
         const now = new Date();
         const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        if (materialTypeId && totalIronedQty > 0) {
-          await this.prisma.workerLedgerEntry.create({
-            data: {
-              workerId: userId,
-              batchId: dto.batchId,
-              materialTypeId,
-              stage: 'IRONING',
-              quantity: totalIronedQty,
-              month,
-            },
-          });
+        if (materialTypeId) {
+          const workerTotals = new Map<string, number>();
+          for (const ie of updatedIroningEntries) {
+            workerTotals.set(ie.workerId, (workerTotals.get(ie.workerId) || 0) + ie.quantity);
+          }
+
+          for (const [workerId, totalQty] of workerTotals) {
+            if (totalQty > 0) {
+              await tx.workerLedgerEntry.upsert({
+                where: { workerId_batchId_stage: { workerId, batchId: dto.batchId, stage: 'IRONING' } },
+                update: { quantity: totalQty },
+                create: { workerId, batchId: dto.batchId, materialTypeId, stage: 'IRONING', quantity: totalQty, month },
+              });
+            }
+          }
         }
       }
-    }
 
-    return entry;
+      return entry;
+    });
   }
 
   async getMyEntries(userId: string) {

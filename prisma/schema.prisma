@@ -242,6 +242,8 @@ model WorkerLedgerEntry {
   month          String          // Format: "YYYY-MM"
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+
+  @@unique([workerId, batchId, stage])
 }
 
 model MonthlyRateTable {

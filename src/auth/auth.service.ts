@@ -68,6 +68,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    if (!storedToken.user.isActive) {
+      await this.prisma.refreshToken.deleteMany({ where: { userId: storedToken.userId } });
+      throw new UnauthorizedException('Account deactivated');
+    }
+
     if (storedToken.expiresAt < new Date()) {
       await this.prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
       throw new UnauthorizedException('Invalid refresh token');

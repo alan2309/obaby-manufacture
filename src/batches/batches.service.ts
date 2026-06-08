@@ -88,13 +88,15 @@ export class BatchesService {
       throw new ConflictException('Roll is already assigned');
     }
 
-    // Create assignment and mark roll as assigned
-    await this.prisma.batchRollAssignment.create({
-      data: { batchId, rollId: dto.rollId },
-    });
-    await this.prisma.inventoryRoll.update({
-      where: { id: dto.rollId },
-      data: { isAssigned: true },
+    // Atomic: create assignment + mark roll assigned
+    await this.prisma.$transaction(async (tx) => {
+      await tx.batchRollAssignment.create({
+        data: { batchId, rollId: dto.rollId },
+      });
+      await tx.inventoryRoll.update({
+        where: { id: dto.rollId },
+        data: { isAssigned: true },
+      });
     });
 
     return this.findOne(batchId);
@@ -121,12 +123,15 @@ export class BatchesService {
       throw new NotFoundException('Roll assignment not found');
     }
 
-    await this.prisma.batchRollAssignment.delete({
-      where: { id: assignment.id },
-    });
-    await this.prisma.inventoryRoll.update({
-      where: { id: rollId },
-      data: { isAssigned: false },
+    // Atomic: delete assignment + unmark roll
+    await this.prisma.$transaction(async (tx) => {
+      await tx.batchRollAssignment.delete({
+        where: { id: assignment.id },
+      });
+      await tx.inventoryRoll.update({
+        where: { id: rollId },
+        data: { isAssigned: false },
+      });
     });
 
     return this.findOne(batchId);
@@ -135,6 +140,7 @@ export class BatchesService {
   async assignCuttingWorker(batchId: string, dto: AssignWorkerDto) {
     const batch = await this.prisma.productionBatch.findUnique({
       where: { id: batchId },
+      include: { rollAssignments: true },
     });
     if (!batch) {
       throw new NotFoundException('Batch not found');
@@ -146,6 +152,11 @@ export class BatchesService {
     }
     if (batch.cuttingWorkerId) {
       throw new ConflictException('Cutting worker already assigned');
+    }
+    if (batch.rollAssignments.length === 0) {
+      throw new BadRequestException(
+        'At least one roll must be assigned before assigning a cutting worker',
+      );
     }
 
     // Validate worker has CUTTING role
@@ -220,18 +231,21 @@ export class BatchesService {
       );
     }
 
-    // Release all assigned rolls
-    for (const assignment of batch.rollAssignments) {
-      await this.prisma.inventoryRoll.update({
-        where: { id: assignment.rollId },
-        data: { isAssigned: false },
-      });
-    }
+    // Atomic: release rolls + update status
+    await this.prisma.$transaction(async (tx) => {
+      for (const assignment of batch.rollAssignments) {
+        await tx.inventoryRoll.update({
+          where: { id: assignment.rollId },
+          data: { isAssigned: false },
+        });
+      }
 
-    return this.prisma.productionBatch.update({
-      where: { id: batchId },
-      data: { status: 'CANCELLED' },
-      include: this.batchIncludes,
+      await tx.productionBatch.update({
+        where: { id: batchId },
+        data: { status: 'CANCELLED' },
+      });
     });
+
+    return this.findOne(batchId);
   }
 }

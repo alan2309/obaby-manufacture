@@ -31,7 +31,15 @@ export function useAuth() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refreshToken = useAuthStore.getState().refreshToken;
+    try {
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch {
+      // Ignore errors on logout — clear local state regardless
+    }
     storeLogout();
     router.push('/login');
   };

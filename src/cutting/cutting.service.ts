@@ -160,13 +160,35 @@ export class CuttingService {
       );
     }
 
-    // Transition to CUTTING_DONE
-    await this.prisma.productionBatch.update({
-      where: { id: batchId },
-      data: { status: 'CUTTING_DONE' },
+    // Atomic: transition status + create ledger entry
+    const totalQuantity = batch.cuttingOutputs.reduce((sum, o) => sum + o.quantity, 0);
+    const materialTypeId = batch.rollAssignments[0]?.roll?.materialTypeId;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productionBatch.update({
+        where: { id: batchId },
+        data: { status: 'CUTTING_DONE' },
+      });
+
+      if (materialTypeId && totalQuantity > 0) {
+        await tx.workerLedgerEntry.upsert({
+          where: { workerId_batchId_stage: { workerId: userId, batchId, stage: 'CUTTING' } },
+          update: { quantity: totalQuantity, materialTypeId, month },
+          create: {
+            workerId: userId,
+            batchId,
+            materialTypeId,
+            stage: 'CUTTING',
+            quantity: totalQuantity,
+            month,
+          },
+        });
+      }
     });
 
-    // If leftover exists, process it for each assigned roll
+    // Non-atomic: process leftover (inventory adjustment — best effort)
     if (batch.cuttingLeftover) {
       const leftoverPerRoll =
         batch.rollAssignments.length > 0
@@ -182,31 +204,13 @@ export class CuttingService {
       }
     }
 
-    // Auto-generate ledger entries for payroll
-    const totalQuantity = batch.cuttingOutputs.reduce((sum, o) => sum + o.quantity, 0);
-    const materialTypeId = batch.rollAssignments[0]?.roll?.materialTypeId;
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-    if (materialTypeId && totalQuantity > 0) {
-      await this.prisma.workerLedgerEntry.create({
-        data: {
-          workerId: userId,
-          batchId,
-          materialTypeId,
-          stage: 'CUTTING',
-          quantity: totalQuantity,
-          month,
-        },
-      });
-    }
-
     return { message: 'Cutting completed successfully' };
   }
 
   async adminEditQuantity(batchId: string, dto: AdminEditQuantityDto) {
     const batch = await this.prisma.productionBatch.findUnique({
       where: { id: batchId },
+      include: { cuttingOutputs: true },
     });
 
     if (!batch) {
@@ -234,6 +238,16 @@ export class CuttingService {
       update: { quantity: dto.quantity },
       create: { batchId, size: dto.size, quantity: dto.quantity },
     });
+
+    // Recalculate and update the associated ledger entry
+    if (batch.cuttingWorkerId) {
+      const allOutputs = await this.prisma.cuttingOutput.findMany({ where: { batchId } });
+      const newTotal = allOutputs.reduce((sum, o) => sum + o.quantity, 0);
+      await this.prisma.workerLedgerEntry.updateMany({
+        where: { workerId: batch.cuttingWorkerId, batchId, stage: 'CUTTING' },
+        data: { quantity: newTotal },
+      });
+    }
 
     return output;
   }

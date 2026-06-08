@@ -19,11 +19,16 @@
 ## Business Rules
 - **Batch lifecycle:** DRAFT → CUTTING_ASSIGNED → CUTTING_IN_PROGRESS → CUTTING_DONE → STITCHING_ASSIGNED → STITCHING_IN_PROGRESS → STITCHING_DONE → IRONING_IN_PROGRESS → COMPLETED
 - **Stitching worker assignment:** Only possible when batch is in CUTTING_DONE status
+- **Cutting worker assignment:** Requires at least one roll assigned to the batch first
 - **Auto-complete on ironing:** Batch moves to COMPLETED when all sizes are fully ironed
 - **Auto-ledger entries:** When a worker completes their stage, a payroll ledger entry is auto-created with total quantity, material type (from roll), and current month
 - **Ironing ledger entry timing:** Created only when batch fully completes (all sizes ironed), not on each partial submission
+- **Multi-worker ironing payroll:** All iron workers who contributed get separate ledger entries proportional to their work
+- **Ledger uniqueness:** One ledger entry per (worker, batch, stage) — enforced by DB constraint, upsert on re-completion
+- **Admin edits propagate to ledger:** When admin edits cutting/stitching quantities, the corresponding ledger entry is automatically recalculated
 - **Payroll finalization is immutable:** Once finalized for a worker+month, cannot re-finalize
 - **Cannot edit finalized ledger entries:** Ledger entries in a finalized month are locked
+- **Deactivated users blocked on refresh:** Token refresh checks isActive, clears all tokens if deactivated
 - **One cutting worker per batch:** Cannot reassign once assigned
 - **One stitching worker per batch:** Cannot reassign once assigned
 - **Multiple rolls per batch:** A batch can have multiple rolls assigned (each roll to only one batch)

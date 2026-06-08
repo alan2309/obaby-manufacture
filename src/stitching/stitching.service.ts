@@ -127,30 +127,33 @@ export class StitchingService {
       );
     }
 
-    // Transition to STITCHING_DONE
-    await this.prisma.productionBatch.update({
-      where: { id: batchId },
-      data: { status: 'STITCHING_DONE' },
-    });
-
-    // Auto-generate ledger entry for payroll
+    // Atomic: transition status + create ledger entry
     const totalQuantity = batch.stitchingOutputs.reduce((sum, o) => sum + o.quantity, 0);
     const materialTypeId = batch.rollAssignments[0]?.roll?.materialTypeId;
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    if (materialTypeId && totalQuantity > 0) {
-      await this.prisma.workerLedgerEntry.create({
-        data: {
-          workerId: userId,
-          batchId,
-          materialTypeId,
-          stage: 'STITCHING',
-          quantity: totalQuantity,
-          month,
-        },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productionBatch.update({
+        where: { id: batchId },
+        data: { status: 'STITCHING_DONE' },
       });
-    }
+
+      if (materialTypeId && totalQuantity > 0) {
+        await tx.workerLedgerEntry.upsert({
+          where: { workerId_batchId_stage: { workerId: userId, batchId, stage: 'STITCHING' } },
+          update: { quantity: totalQuantity, materialTypeId, month },
+          create: {
+            workerId: userId,
+            batchId,
+            materialTypeId,
+            stage: 'STITCHING',
+            quantity: totalQuantity,
+            month,
+          },
+        });
+      }
+    });
 
     return { message: 'Stitching completed successfully' };
   }
@@ -176,10 +179,22 @@ export class StitchingService {
       );
     }
 
-    return this.prisma.stitchingOutput.upsert({
+    const output = await this.prisma.stitchingOutput.upsert({
       where: { batchId_size: { batchId, size: dto.size } },
       update: { quantity: dto.quantity },
       create: { batchId, size: dto.size, quantity: dto.quantity },
     });
+
+    // Recalculate and update the associated ledger entry
+    if (batch.stitchingWorkerId) {
+      const allOutputs = await this.prisma.stitchingOutput.findMany({ where: { batchId } });
+      const newTotal = allOutputs.reduce((sum, o) => sum + o.quantity, 0);
+      await this.prisma.workerLedgerEntry.updateMany({
+        where: { workerId: batch.stitchingWorkerId, batchId, stage: 'STITCHING' },
+        data: { quantity: newTotal },
+      });
+    }
+
+    return output;
   }
 }
