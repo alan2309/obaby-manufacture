@@ -59,6 +59,14 @@ export default function StitchingPage() {
                 const cuttingQty = batch.cuttingQuantities || {};
                 const sizes = Object.keys(cuttingQty);
 
+                const formatSize = (s: string) => {
+                  if (s === "XXL") return "XXL/2XL";
+                  if (s === "XXL3") return "3XL";
+                  if (s === "XXL4") return "4XL";
+                  if (s === "XXL5") return "5XL";
+                  return s;
+                };
+
                 return (
                   <div key={batch.id} className="rounded-lg border border-gray-200 bg-white p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -81,7 +89,7 @@ export default function StitchingPage() {
                         <div className="flex flex-wrap gap-2 text-sm text-gray-600">
                           {sizes.map((size) => (
                             <span key={size} className="rounded bg-gray-100 px-2 py-0.5">
-                              {size}: {cuttingQty[size]}
+                              {formatSize(size)}: {cuttingQty[size]}
                             </span>
                           ))}
                         </div>
@@ -93,7 +101,7 @@ export default function StitchingPage() {
                       <div className="flex flex-wrap gap-2">
                         {(sizes.length > 0 ? sizes : ["S", "M", "L", "XL"]).map((size) => (
                           <div key={size} className="flex items-center gap-1">
-                            <label className="text-xs text-gray-600 w-8">{size}:</label>
+                            <label className="text-xs text-gray-600 w-14">{formatSize(size)}:</label>
                             <input
                               type="number"
                               min="0"

@@ -100,7 +100,7 @@ export default function BatchesPage() {
     ? users.filter((u: User) => u.role === "STITCHING")
     : [];
   const availableRolls = Array.isArray(rolls)
-    ? rolls.filter((r: { assigned: boolean }) => !r.assigned)
+    ? rolls.filter((r: { isAssigned: boolean }) => !r.isAssigned)
     : [];
 
   return (

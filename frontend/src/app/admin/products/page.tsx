@@ -8,9 +8,22 @@ interface Product {
   id: string;
   name: string;
   category: string;
-  sizeRange: string;
-  materials?: { name: string }[];
+  sizeRangeFrom: string;
+  sizeRangeTo: string;
+  materials?: { materialType?: { name: string } }[];
 }
+
+const SIZES = [
+  { value: "XS", label: "XS" },
+  { value: "S", label: "S" },
+  { value: "M", label: "M" },
+  { value: "L", label: "L" },
+  { value: "XL", label: "XL" },
+  { value: "XXL", label: "XXL (2XL)" },
+  { value: "XXL3", label: "3XL" },
+  { value: "XXL4", label: "4XL" },
+  { value: "XXL5", label: "5XL" },
+];
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
@@ -18,7 +31,8 @@ export default function ProductsPage() {
   const [form, setForm] = useState({
     name: "",
     category: "",
-    sizeRange: "",
+    sizeRangeFrom: "S",
+    sizeRangeTo: "XL",
     materialTypeIds: [] as string[],
   });
 
@@ -37,7 +51,7 @@ export default function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setShowForm(false);
-      setForm({ name: "", category: "", sizeRange: "", materialTypeIds: [] });
+      setForm({ name: "", category: "", sizeRangeFrom: "S", sizeRangeTo: "XL", materialTypeIds: [] });
     },
   });
 
@@ -70,7 +84,7 @@ export default function ProductsPage() {
           }}
           className="mt-4 rounded-lg border border-gray-200 bg-white p-4 space-y-3"
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <input
               placeholder="Product Name"
               value={form.name}
@@ -85,13 +99,32 @@ export default function ProductsPage() {
               className="rounded border border-gray-300 px-3 py-2 text-sm"
               required
             />
-            <input
-              placeholder="Size Range (e.g. S-XL)"
-              value={form.sizeRange}
-              onChange={(e) => setForm({ ...form, sizeRange: e.target.value })}
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-              required
-            />
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-0.5">Size From</label>
+              <select
+                value={form.sizeRangeFrom}
+                onChange={(e) => setForm({ ...form, sizeRangeFrom: e.target.value })}
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+                required
+              >
+                {SIZES.map((sz) => (
+                  <option key={sz.value} value={sz.value}>{sz.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-0.5">Size To</label>
+              <select
+                value={form.sizeRangeTo}
+                onChange={(e) => setForm({ ...form, sizeRangeTo: e.target.value })}
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+                required
+              >
+                {SIZES.map((sz) => (
+                  <option key={sz.value} value={sz.value}>{sz.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">Materials:</p>
@@ -117,7 +150,7 @@ export default function ProductsPage() {
             {addProduct.isPending ? "Adding..." : "Add Product"}
           </button>
           {addProduct.isError && (
-            <p className="text-sm text-red-600">Failed to add product</p>
+            <p className="text-sm text-red-600">Failed to add product: {((addProduct.error as any)?.response?.data?.message as any) || "Verify input fields"}</p>
           )}
         </form>
       )}
@@ -140,9 +173,9 @@ export default function ProductsPage() {
                 <tr key={p.id}>
                   <td className="px-4 py-3 text-sm text-gray-900">{p.name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.category}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.sizeRange}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{p.sizeRangeFrom} - {p.sizeRangeTo}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {p.materials?.map((m) => m.name).join(", ") ?? "-"}
+                    {p.materials?.map((m) => m.materialType?.name).filter(Boolean).join(", ") ?? "-"}
                   </td>
                 </tr>
               ))}

@@ -9,8 +9,8 @@ import { useState } from "react";
 interface CuttingBatch {
   id: string;
   batchCode: string;
-  product?: { name: string; sizeRange: string };
-  rolls?: { rollCode: string; meters: number }[];
+  product?: { name: string; sizeRangeFrom: string; sizeRangeTo: string };
+  rollAssignments?: { roll: { rollCode: string; remainingMeters: number } }[];
   status: string;
   quantities?: Record<string, number>;
   leftover?: number;
@@ -50,14 +50,21 @@ export default function CuttingPage() {
     },
   });
 
-  const getSizes = (sizeRange: string | undefined): string[] => {
-    if (!sizeRange) return ["S", "M", "L", "XL"];
-    const parts = sizeRange.split("-").map((s) => s.trim());
-    const allSizes = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL"];
-    const startIdx = allSizes.indexOf(parts[0]);
-    const endIdx = allSizes.indexOf(parts[parts.length - 1]);
-    if (startIdx === -1 || endIdx === -1) return parts;
+  const getSizes = (from?: string, to?: string): string[] => {
+    const allSizes = ["XS", "S", "M", "L", "XL", "XXL", "XXL3", "XXL4", "XXL5"];
+    if (!from || !to) return ["S", "M", "L", "XL"];
+    const startIdx = allSizes.indexOf(from);
+    const endIdx = allSizes.indexOf(to);
+    if (startIdx === -1 || endIdx === -1) return ["S", "M", "L", "XL"];
     return allSizes.slice(startIdx, endIdx + 1);
+  };
+
+  const formatSize = (s: string) => {
+    if (s === "XXL") return "XXL/2XL";
+    if (s === "XXL3") return "3XL";
+    if (s === "XXL4") return "4XL";
+    if (s === "XXL5") return "5XL";
+    return s;
   };
 
   return (
@@ -75,7 +82,7 @@ export default function CuttingPage() {
           ) : (
             <div className="mt-4 space-y-4">
               {batches.map((batch: CuttingBatch) => {
-                const sizes = getSizes(batch.product?.sizeRange);
+                const sizes = getSizes(batch.product?.sizeRangeFrom, batch.product?.sizeRangeTo);
                 const batchQty = quantities[batch.id] || {};
                 const batchLeftover = leftovers[batch.id] || "";
 
@@ -95,10 +102,10 @@ export default function CuttingPage() {
                       </button>
                     </div>
 
-                    {batch.rolls && batch.rolls.length > 0 && (
+                    {batch.rollAssignments && batch.rollAssignments.length > 0 && (
                       <div className="mb-3 text-sm text-gray-600">
                         <strong>Rolls:</strong>{" "}
-                        {batch.rolls.map((r) => `${r.rollCode} (${r.meters}m)`).join(", ")}
+                        {batch.rollAssignments.map((ra) => `${ra.roll.rollCode} (${ra.roll.remainingMeters}m)`).join(", ")}
                       </div>
                     )}
 
@@ -107,7 +114,7 @@ export default function CuttingPage() {
                       <div className="flex flex-wrap gap-2">
                         {sizes.map((size) => (
                           <div key={size} className="flex items-center gap-1">
-                            <label className="text-xs text-gray-600 w-8">{size}:</label>
+                            <label className="text-xs text-gray-600 w-14">{formatSize(size)}:</label>
                             <input
                               type="number"
                               min="0"

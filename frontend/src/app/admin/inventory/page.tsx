@@ -10,8 +10,12 @@ interface Roll {
   vendor?: { name: string };
   materialType?: { name: string };
   color: string;
-  meters: number;
-  assigned: boolean;
+  shade?: string;
+  gsm: number;
+  initialMeters: number;
+  remainingMeters: number;
+  cost: number;
+  isAssigned: boolean;
 }
 
 export default function InventoryPage() {
@@ -22,7 +26,11 @@ export default function InventoryPage() {
     vendorId: "",
     materialTypeId: "",
     color: "",
-    meters: "",
+    shade: "",
+    gsm: "",
+    initialMeters: "",
+    cost: "",
+    purchaseDate: new Date().toISOString().split("T")[0],
   });
 
   const { data: rolls, isLoading } = useQuery({
@@ -43,13 +51,30 @@ export default function InventoryPage() {
   const addRoll = useMutation({
     mutationFn: (data: typeof form) =>
       api.post("/inventory/rolls", {
-        ...data,
-        meters: Number(data.meters),
+        rollCode: data.rollCode,
+        vendorId: data.vendorId,
+        materialTypeId: data.materialTypeId,
+        color: data.color,
+        shade: data.shade || undefined,
+        gsm: Number(data.gsm),
+        initialMeters: Number(data.initialMeters),
+        cost: Number(data.cost),
+        purchaseDate: new Date(data.purchaseDate).toISOString(),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rolls"] });
       setShowForm(false);
-      setForm({ rollCode: "", vendorId: "", materialTypeId: "", color: "", meters: "" });
+      setForm({
+        rollCode: "",
+        vendorId: "",
+        materialTypeId: "",
+        color: "",
+        shade: "",
+        gsm: "",
+        initialMeters: "",
+        cost: "",
+        purchaseDate: new Date().toISOString().split("T")[0],
+      });
     },
   });
 
@@ -113,13 +138,45 @@ export default function InventoryPage() {
               required
             />
             <input
-              placeholder="Meters"
+              placeholder="Shade (Optional)"
+              value={form.shade}
+              onChange={(e) => setForm({ ...form, shade: e.target.value })}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              placeholder="GSM"
               type="number"
-              value={form.meters}
-              onChange={(e) => setForm({ ...form, meters: e.target.value })}
+              value={form.gsm}
+              onChange={(e) => setForm({ ...form, gsm: e.target.value })}
               className="rounded border border-gray-300 px-3 py-2 text-sm"
               required
             />
+            <input
+              placeholder="Meters (Length)"
+              type="number"
+              value={form.initialMeters}
+              onChange={(e) => setForm({ ...form, initialMeters: e.target.value })}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+              required
+            />
+            <input
+              placeholder="Cost"
+              type="number"
+              value={form.cost}
+              onChange={(e) => setForm({ ...form, cost: e.target.value })}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+              required
+            />
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-0.5">Purchase Date</label>
+              <input
+                type="date"
+                value={form.purchaseDate}
+                onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })}
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+                required
+              />
+            </div>
           </div>
           <button
             type="submit"
@@ -129,7 +186,7 @@ export default function InventoryPage() {
             {addRoll.isPending ? "Adding..." : "Add Roll"}
           </button>
           {addRoll.isError && (
-            <p className="text-sm text-red-600">Failed to add roll</p>
+            <p className="text-sm text-red-600">Failed to add roll: {((addRoll.error as any)?.response?.data?.message as any) || "Verify fields"}</p>
           )}
         </form>
       )}
@@ -144,8 +201,10 @@ export default function InventoryPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roll Code</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Material</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Color</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meters</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Color / Shade</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">GSM</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meters (Remaining/Initial)</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               </tr>
             </thead>
@@ -155,11 +214,13 @@ export default function InventoryPage() {
                   <td className="px-4 py-3 text-sm text-gray-900">{roll.rollCode}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{roll.vendor?.name ?? "-"}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{roll.materialType?.name ?? "-"}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{roll.color}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{roll.meters}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{roll.color}{roll.shade ? ` / ${roll.shade}` : ""}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{roll.gsm}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{roll.remainingMeters}m / {roll.initialMeters}m</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">₹{roll.cost}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${roll.assigned ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
-                      {roll.assigned ? "Assigned" : "Available"}
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${roll.isAssigned ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                      {roll.isAssigned ? "Assigned" : "Available"}
                     </span>
                   </td>
                 </tr>
