@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Customer Question Tracker",
+  "description": "After finishing work, checks if any questions or constraints need to be logged for the customer.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Look back at what you just did. Were you unsure about anything the customer should decide? If yes, add it to docs/customer-questions.md as [MANDATORY] or [OPTIONAL]. Did you hardcode any value, limit, or rule the customer should know about? If yes, add it to docs/feature-constraints.md. If there's nothing to log, do nothing."
+  }
+}

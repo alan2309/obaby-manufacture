@@ -6,6 +6,6 @@ export class EnterStitchingDto {
   size: Size;
 
   @IsInt()
-  @Min(0)
+  @Min(1, { message: 'Quantity must be at least 1' })
   quantity: number;
 }

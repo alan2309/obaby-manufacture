@@ -146,6 +146,7 @@ export default function InventoryPage() {
             <input
               placeholder="GSM"
               type="number"
+              min="1"
               value={form.gsm}
               onChange={(e) => setForm({ ...form, gsm: e.target.value })}
               className="rounded border border-gray-300 px-3 py-2 text-sm"
@@ -154,6 +155,8 @@ export default function InventoryPage() {
             <input
               placeholder="Meters (Length)"
               type="number"
+              min="0.1"
+              step="0.1"
               value={form.initialMeters}
               onChange={(e) => setForm({ ...form, initialMeters: e.target.value })}
               className="rounded border border-gray-300 px-3 py-2 text-sm"
@@ -162,6 +165,8 @@ export default function InventoryPage() {
             <input
               placeholder="Cost"
               type="number"
+              min="0.01"
+              step="0.01"
               value={form.cost}
               onChange={(e) => setForm({ ...form, cost: e.target.value })}
               className="rounded border border-gray-300 px-3 py-2 text-sm"

@@ -69,12 +69,12 @@ export class AuthService {
     }
 
     if (storedToken.expiresAt < new Date()) {
-      await this.prisma.refreshToken.delete({ where: { id: storedToken.id } });
+      await this.prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    // Rotate: delete old token
-    await this.prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Rotate: delete old token (use deleteMany to avoid crash if already gone)
+    await this.prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
 
     // Create new refresh token
     const newRefreshToken = randomUUID();

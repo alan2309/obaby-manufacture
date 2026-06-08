@@ -94,6 +94,7 @@ export class CuttingService {
   async enterLeftover(batchId: string, userId: string, dto: EnterLeftoverDto) {
     const batch = await this.prisma.productionBatch.findUnique({
       where: { id: batchId },
+      include: { rollAssignments: { include: { roll: true } } },
     });
 
     if (!batch) {
@@ -107,6 +108,17 @@ export class CuttingService {
     if (batch.status !== 'CUTTING_IN_PROGRESS') {
       throw new BadRequestException(
         'Batch must be in CUTTING_IN_PROGRESS status',
+      );
+    }
+
+    // Validate leftover doesn't exceed total assigned roll meters
+    const totalMeters = batch.rollAssignments.reduce(
+      (sum, ra) => sum + ra.roll.initialMeters,
+      0,
+    );
+    if (dto.leftoverMeters > totalMeters) {
+      throw new BadRequestException(
+        `Leftover (${dto.leftoverMeters}m) cannot exceed total roll meters (${totalMeters}m)`,
       );
     }
 
@@ -124,7 +136,7 @@ export class CuttingService {
       include: {
         cuttingOutputs: true,
         cuttingLeftover: true,
-        rollAssignments: true,
+        rollAssignments: { include: { roll: true } },
       },
     });
 
@@ -168,6 +180,25 @@ export class CuttingService {
           userId,
         );
       }
+    }
+
+    // Auto-generate ledger entries for payroll
+    const totalQuantity = batch.cuttingOutputs.reduce((sum, o) => sum + o.quantity, 0);
+    const materialTypeId = batch.rollAssignments[0]?.roll?.materialTypeId;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    if (materialTypeId && totalQuantity > 0) {
+      await this.prisma.workerLedgerEntry.create({
+        data: {
+          workerId: userId,
+          batchId,
+          materialTypeId,
+          stage: 'CUTTING',
+          quantity: totalQuantity,
+          month,
+        },
+      });
     }
 
     return { message: 'Cutting completed successfully' };

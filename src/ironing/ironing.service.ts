@@ -118,6 +118,7 @@ export class IroningService {
       include: {
         stitchingOutputs: true,
         ironingEntries: true,
+        rollAssignments: { include: { roll: true } },
       },
     });
 
@@ -134,6 +135,27 @@ export class IroningService {
           where: { id: dto.batchId },
           data: { status: 'COMPLETED' },
         });
+
+        // Auto-generate ledger entry for ironing worker
+        const totalIronedQty = updatedBatch.ironingEntries
+          .filter((ie) => ie.workerId === userId)
+          .reduce((sum, ie) => sum + ie.quantity, 0);
+        const materialTypeId = updatedBatch.rollAssignments[0]?.roll?.materialTypeId;
+        const now = new Date();
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        if (materialTypeId && totalIronedQty > 0) {
+          await this.prisma.workerLedgerEntry.create({
+            data: {
+              workerId: userId,
+              batchId: dto.batchId,
+              materialTypeId,
+              stage: 'IRONING',
+              quantity: totalIronedQty,
+              month,
+            },
+          });
+        }
       }
     }
 

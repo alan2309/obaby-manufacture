@@ -46,12 +46,15 @@ export default function ProductsPage() {
     queryFn: () => api.get("/material-types").then((r) => r.data),
   });
 
+  const [formError, setFormError] = useState("");
+
   const addProduct = useMutation({
     mutationFn: (data: typeof form) => api.post("/products", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setShowForm(false);
       setForm({ name: "", category: "", sizeRangeFrom: "S", sizeRangeTo: "XL", materialTypeIds: [] });
+      setFormError("");
     },
   });
 
@@ -80,6 +83,20 @@ export default function ProductsPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            setFormError("");
+            // Validate materials selected
+            if (form.materialTypeIds.length === 0) {
+              setFormError("Please select at least one material type.");
+              return;
+            }
+            // Validate size range
+            const allSizes = SIZES.map((s) => s.value);
+            const fromIdx = allSizes.indexOf(form.sizeRangeFrom);
+            const toIdx = allSizes.indexOf(form.sizeRangeTo);
+            if (fromIdx > toIdx) {
+              setFormError("'Size From' must be smaller than or equal to 'Size To'.");
+              return;
+            }
             addProduct.mutate(form);
           }}
           className="mt-4 rounded-lg border border-gray-200 bg-white p-4 space-y-3"
@@ -149,6 +166,9 @@ export default function ProductsPage() {
           >
             {addProduct.isPending ? "Adding..." : "Add Product"}
           </button>
+          {formError && (
+            <p className="text-sm text-red-600">{formError}</p>
+          )}
           {addProduct.isError && (
             <p className="text-sm text-red-600">Failed to add product: {((addProduct.error as any)?.response?.data?.message as any) || "Verify input fields"}</p>
           )}

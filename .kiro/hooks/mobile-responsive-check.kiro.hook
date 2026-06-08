@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Mobile Responsive Check",
+  "description": "After writing a frontend component, reminds Kiro to verify it's mobile-friendly.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "frontend/src/**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Check the file you just edited. Is it mobile responsive? Look for: mobile-first Tailwind classes, no fixed widths that break on small screens, stacking layouts on mobile, tap-friendly buttons/inputs. If something isn't responsive, fix it now."
+  }
+}

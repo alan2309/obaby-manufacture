@@ -101,7 +101,10 @@ export class StitchingService {
   async completeStitching(batchId: string, userId: string) {
     const batch = await this.prisma.productionBatch.findUnique({
       where: { id: batchId },
-      include: { stitchingOutputs: true },
+      include: {
+        stitchingOutputs: true,
+        rollAssignments: { include: { roll: true } },
+      },
     });
 
     if (!batch) {
@@ -129,6 +132,25 @@ export class StitchingService {
       where: { id: batchId },
       data: { status: 'STITCHING_DONE' },
     });
+
+    // Auto-generate ledger entry for payroll
+    const totalQuantity = batch.stitchingOutputs.reduce((sum, o) => sum + o.quantity, 0);
+    const materialTypeId = batch.rollAssignments[0]?.roll?.materialTypeId;
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    if (materialTypeId && totalQuantity > 0) {
+      await this.prisma.workerLedgerEntry.create({
+        data: {
+          workerId: userId,
+          batchId,
+          materialTypeId,
+          stage: 'STITCHING',
+          quantity: totalQuantity,
+          month,
+        },
+      });
+    }
 
     return { message: 'Stitching completed successfully' };
   }
